@@ -1,10 +1,10 @@
-import got from 'got'
+import got, { HTTPAlias, Headers } from 'got'
 import { DateTime } from 'luxon'
 import qs from 'qs'
 import { URL } from 'url'
 import { ErrorResponse } from '../v1/error'
-import { OutgoingHttpHeaders } from 'http'
-import zlib from 'zlib'
+import * as zlib from 'zlib'
+import { tsvParse } from 'd3-dsv'
 
 export interface API {
     baseUrl: string
@@ -32,7 +32,7 @@ export enum ContentType {
 interface APIOptions {
     query?: object
     body?: object
-    contentType?: ContentType
+    accept?: ContentType
 }
 
 export function HEAD<T>(
@@ -40,58 +40,60 @@ export function HEAD<T>(
     path: string,
     options: APIOptions = {}
 ): Promise<T> {
-    return call(api, path, 'HEAD', options)
+    return call(api, path, 'head', options)
 }
 export function GET<T>(
     api: API,
     path: string,
     options: APIOptions = {}
 ): Promise<T> {
-    return call(api, path, 'GET', options)
+    return call(api, path, 'get', options)
 }
 export function POST<T>(
     api: API,
     path: string,
     options: APIOptions = {}
 ): Promise<T> {
-    return call(api, path, 'POST', options)
+    return call(api, path, 'post', options)
 }
 export function PUT<T>(
     api: API,
     path: string,
     options: APIOptions = {}
 ): Promise<T> {
-    return call(api, path, 'PUT', options)
+    return call(api, path, 'put', options)
 }
 export function PATCH<T>(
     api: API,
     path: string,
     options: APIOptions = {}
 ): Promise<T> {
-    return call(api, path, 'PATCH', options)
+    return call(api, path, 'patch', options)
 }
 export function DELETE<T>(
     api: API,
     path: string,
     options: APIOptions = {}
 ): Promise<T> {
-    return call(api, path, 'DELETE', options)
+    return call(api, path, 'delete', options)
 }
 
 async function call<T>(
     api: API,
     path: string,
-    method: string,
+    method: HTTPAlias,
     options: APIOptions = {}
 ): Promise<T> {
     let rawResponse
     try {
         rawResponse = await got(path, {
-            baseUrl: api.baseUrl,
+            prefixUrl: api.baseUrl,
             method,
-            headers: headers(api.token, options.contentType),
-            query: query(options.query),
+            headers: headers(api.token, options.accept),
+            searchParams: query(options.query),
             body: body(options.body),
+            responseType:
+                options.accept === ContentType.GZIP ? 'buffer' : undefined,
         })
     } catch (error) {
         throw new Error(error.response.body)
@@ -99,10 +101,12 @@ async function call<T>(
 
     const { body: responseBody, ...response } = rawResponse
 
-    if (!body) {
+    if (!responseBody) {
         return (undefined as unknown) as T
-    } else if (options.contentType === ContentType.GZIP) {
-        return (body as unknown) as T
+    } else if (options.accept === ContentType.GZIP) {
+        return (gunzip(responseBody as any, 'utf8').then(string =>
+            tsvParse(string)
+        ) as unknown) as T
     } else {
         return json(responseBody, response)
     }
@@ -110,10 +114,10 @@ async function call<T>(
 
 function headers(
     token: string | null,
-    contentType: ContentType = ContentType.JSON
-): OutgoingHttpHeaders {
-    const defaultHeaders: OutgoingHttpHeaders = {
-        'content-type': contentType,
+    accept: ContentType = ContentType.JSON
+): Headers {
+    const defaultHeaders: Headers = {
+        Accept: accept,
     }
     let headers = defaultHeaders
     if (token) {
@@ -212,6 +216,38 @@ function body(object: object | undefined): string | undefined {
         return
     }
     const json = JSON.stringify(object)
-    console.log(json)
     return json
+}
+
+export function gunzip(input: zlib.InputType): Promise<Buffer>
+export function gunzip(input: zlib.InputType, encoding: string): Promise<string>
+export function gunzip(
+    input: zlib.InputType,
+    encoding?: string
+): Promise<Buffer | string> {
+    return new Promise<Buffer | string>((resolve, reject) => {
+        try {
+            zlib.gunzip(input, (err, unzipped) => {
+                try {
+                    if (err) {
+                        reject(err)
+                    } else {
+                        resolve(
+                            isNil(encoding)
+                                ? unzipped
+                                : unzipped.toString(encoding)
+                        )
+                    }
+                } catch (e) {
+                    reject(e)
+                }
+            })
+        } catch (e) {
+            reject(e)
+        }
+    })
+}
+
+export function isNil(val: unknown): boolean {
+    return null === val || 'undefined' === typeof val
 }

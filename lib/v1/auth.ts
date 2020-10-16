@@ -1,6 +1,6 @@
-import jwt from 'jsonwebtoken'
+import jwt, { SignOptions } from 'jsonwebtoken'
 
-const jwtOptions = (iss: string, kid: string) => ({
+const jwtOptions = (iss: string, kid: string): SignOptions => ({
     algorithm: 'ES256',
     keyid: kid,
     audience: 'appstoreconnect-v1',

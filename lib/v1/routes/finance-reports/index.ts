@@ -8,7 +8,7 @@ export function downloadFinancialReports(
     api: API,
     query: GetFinanceReportsQuery
 ): Promise<Buffer> {
-    return GET(api, '/financeReports', { query, contentType: ContentType.GZIP })
+    return GET(api, 'financeReports', { query, accept: ContentType.GZIP })
 }
 
 /**
@@ -19,7 +19,7 @@ export function downloadSalesReports(
     api: API,
     query: GetSalesReportsQuery
 ): Promise<Buffer> {
-    return GET(api, '/salesReports', { query, contentType: ContentType.GZIP })
+    return GET(api, 'salesReports', { query, accept: ContentType.GZIP })
 }
 
 import { DateTime } from 'luxon'
