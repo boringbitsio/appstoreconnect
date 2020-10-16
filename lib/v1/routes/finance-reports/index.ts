@@ -1,25 +1,54 @@
 import { API, GET, ContentType } from '../../../api'
+import { tsvParse, DSVRowArray } from 'd3-dsv'
 
 /**
  * Download finance reports filtered by your specified criteria.
  * @param query
  */
-export function downloadFinancialReports(
+export async function downloadFinancialReports(
     api: API,
     query: GetFinanceReportsQuery
-): Promise<Buffer> {
-    return GET(api, 'financeReports', { query, accept: ContentType.GZIP })
+): Promise<DSVRowArray> {
+    const body = await GET<string>(api, 'financeReports', {
+        query,
+        accept: ContentType.GZIP,
+    })
+
+    return parseTsv(body, query)
 }
 
 /**
  * Download sales and trends reports filtered by your specified criteria.
  * @param query
  */
-export function downloadSalesReports(
+export async function downloadSalesReports(
     api: API,
     query: GetSalesReportsQuery
-): Promise<Buffer> {
-    return GET(api, 'salesReports', { query, accept: ContentType.GZIP })
+): Promise<DSVRowArray> {
+    const body = await GET<string>(api, 'salesReports', {
+        query,
+        accept: ContentType.GZIP,
+    })
+
+    return parseTsv(body, query)
+}
+
+function removeRows(stringBody: string, n: number) {
+    for (let i = 0; i < n; i++) {
+        stringBody = stringBody.slice(stringBody.indexOf('\n') + 1)
+    }
+
+    return stringBody
+}
+
+function parseTsv(
+    stringBody: string,
+    query: GetFinanceReportsQuery | GetSalesReportsQuery
+) {
+    if (query.filter && query.filter.reportType === 'FINANCE_DETAIL') {
+        stringBody = removeRows(stringBody, 3)
+    }
+    return tsvParse(stringBody)
 }
 
 import { DateTime } from 'luxon'
@@ -81,7 +110,7 @@ interface GetSalesReportsQuery {
     }
 }
 
-type FinanceReportType = 'FINANCIAL'
+type FinanceReportType = 'FINANCIAL' | 'FINANCE_DETAIL'
 type Frequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
 type SalesReportSubType = 'SUMMARY' | 'DETAILED' | 'OPT_IN'
 type SalesReportType =

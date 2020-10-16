@@ -4,7 +4,6 @@ import qs from 'qs'
 import { URL } from 'url'
 import { ErrorResponse } from '../v1/error'
 import * as zlib from 'zlib'
-import { tsvParse } from 'd3-dsv'
 
 export interface API {
     baseUrl: string
@@ -104,9 +103,7 @@ async function call<T>(
     if (!responseBody) {
         return (undefined as unknown) as T
     } else if (options.accept === ContentType.GZIP) {
-        return (gunzip(responseBody as any, 'utf8').then(string =>
-            tsvParse(string)
-        ) as unknown) as T
+        return (gunzip(responseBody as any, 'utf8') as unknown) as T
     } else {
         return json(responseBody, response)
     }
