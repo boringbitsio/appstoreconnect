@@ -1,5 +1,6 @@
 import { API, GET, ContentType } from '../../../api'
-import { tsvParse, DSVRowArray } from 'd3-dsv'
+import { tsvParse, autoType, DSVRowString } from 'd3-dsv'
+import { mapKeys, snakeCase, deburr } from 'lodash'
 
 /**
  * Download finance reports filtered by your specified criteria.
@@ -8,13 +9,26 @@ import { tsvParse, DSVRowArray } from 'd3-dsv'
 export async function downloadFinancialReports(
     api: API,
     query: GetFinanceReportsQuery
-): Promise<DSVRowArray> {
+): Promise<RowArray> {
     const body = await GET<string>(api, 'financeReports', {
         query,
         accept: ContentType.GZIP,
     })
 
     return parseTsv(body, query)
+}
+
+function mapKey(_: any, key: string) {
+    return snakeCase(deburr(key))
+}
+
+interface RowArray<Columns extends string = string>
+    extends Array<DSVRowString<Columns>> {
+    /**
+     * List of column names.
+     */
+    columns: Columns[]
+    originalColumns: Columns[]
 }
 
 /**
@@ -24,7 +38,7 @@ export async function downloadFinancialReports(
 export async function downloadSalesReports(
     api: API,
     query: GetSalesReportsQuery
-): Promise<DSVRowArray> {
+): Promise<RowArray> {
     const body = await GET<string>(api, 'salesReports', {
         query,
         accept: ContentType.GZIP,
@@ -48,7 +62,11 @@ function parseTsv(
     if (query.filter && query.filter.reportType === 'FINANCE_DETAIL') {
         stringBody = removeRows(stringBody, 3)
     }
-    return tsvParse(stringBody)
+    const parsed = tsvParse(stringBody, autoType)
+    const mapped: any = parsed.map((row: any) => mapKeys(row, mapKey))
+    mapped.originalColumns = parsed.columns
+    mapped.columns = parsed.columns.map(key => mapKey(null, key))
+    return mapped
 }
 
 import { DateTime } from 'luxon'
@@ -106,14 +124,14 @@ interface GetSalesReportsQuery {
         /**
          * The version of the report.
          */
-        version?: string
+        version: string
     }
 }
 
-type FinanceReportType = 'FINANCIAL' | 'FINANCE_DETAIL'
-type Frequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
-type SalesReportSubType = 'SUMMARY' | 'DETAILED' | 'OPT_IN'
-type SalesReportType =
+export type FinanceReportType = 'FINANCIAL' | 'FINANCE_DETAIL'
+export type Frequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
+export type SalesReportSubType = 'SUMMARY' | 'DETAILED' | 'OPT_IN'
+export type SalesReportType =
     | 'SALES'
     | 'PRE_ORDER'
     | 'NEWSSTAND'
